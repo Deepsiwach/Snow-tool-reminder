@@ -41,8 +41,21 @@ jobs:
         run: .\build.ps1
         shell: pwsh
 
-      - name: Publish GitHub Release
+      - name: Create GitHub Release and upload installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "v$env:RELEASE_VERSION" "dist\SNOW Reminder Setup.exe" --title "SNOW Reminder $env:RELEASE_VERSION" --generate-notes
+        run: |
+          $tag = "v$env:RELEASE_VERSION"
+          $installer = Resolve-Path "dist\SNOW Reminder Setup.exe"
+          if (-not $installer) { throw "The setup file was not built." }
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "SNOW Reminder $env:RELEASE_VERSION" --generate-notes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          gh release upload $tag $installer.Path --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $assets = gh release view $tag --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($assets -notcontains "SNOW Reminder Setup.exe") { throw "The setup file was not attached to the release." }
         shell: pwsh

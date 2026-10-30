@@ -29,6 +29,7 @@ DEFAULTS = {"snow_url": "", "interval_minutes": 60, "start_with_windows": True}
 UPDATE_CHECK_MS = 15 * 60 * 1000
 INSTALLER_ASSET = "SNOW Reminder Setup.exe"
 MAX_INSTALLER_BYTES = 250 * 1024 * 1024
+NO_RELEASE_MESSAGE = "Already up to date. Enjoy Buddy."
 
 
 def config_path() -> Path:
@@ -209,7 +210,10 @@ class SnowReminder:
             asset = next((item for item in release.get("assets", [])
                           if item.get("name") == INSTALLER_ASSET), None)
             if not asset or not str(asset.get("browser_download_url", "")).startswith("https://github.com/"):
-                raise ValueError(f"Release {remote_version} does not contain {INSTALLER_ASSET}.")
+                raise ValueError(
+                    f"GitHub release v{remote_version} has no installer attached yet. "
+                    "The release workflow must upload the setup file."
+                )
             info = {"version": remote_version, "url": asset["browser_download_url"],
                     "digest": asset.get("digest"), "size": int(asset.get("size", 0))}
             if info["size"] > MAX_INSTALLER_BYTES:
@@ -217,7 +221,7 @@ class SnowReminder:
             self.root.after(0, lambda: self._update_check_finished(manual, info))
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
-                error = ("No published release was found. ")
+                error = NO_RELEASE_MESSAGE
             else:
                 error = str(exc)
             self.root.after(0, lambda message=error: self._update_check_finished(manual, None, message))
@@ -228,7 +232,7 @@ class SnowReminder:
         self.update_check_active = False
         if error:
             if manual:
-                if error.startswith("No published release was found."):
+                if error == NO_RELEASE_MESSAGE:
                     messagebox.showinfo(APP_NAME, error)
                 else:
                     messagebox.showerror(APP_NAME, f"Could not check for updates.\n\n{error}")
