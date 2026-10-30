@@ -1,0 +1,48 @@
+name: Build and publish SNOW Reminder
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+        shell: pwsh
+
+      - name: Set this build's version
+        shell: pwsh
+        run: |
+          $patch = [int]$env:GITHUB_RUN_NUMBER + 2
+          $version = "1.0.$patch"
+          Set-Content -NoNewline version.py "APP_VERSION = `"$version`""
+          $installer = Get-Content installer.iss -Raw
+          $installer = [regex]::Replace($installer, '(?m)^#define AppVersion ".*"$', "#define AppVersion `"$version`"")
+          Set-Content installer.iss $installer
+          "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Build standalone app and installer
+        run: .\build.ps1
+        shell: pwsh
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "v$env:RELEASE_VERSION" "dist\SNOW Reminder Setup.exe" --title "SNOW Reminder $env:RELEASE_VERSION" --generate-notes
+        shell: pwsh
