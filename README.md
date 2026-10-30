@@ -20,6 +20,10 @@ or other runtime needs to be installed. The installer also starts the app when
 installation finishes. Open the app's notification-area menu and choose Settings
 to set the SNOW URL and reminder interval.
 
+On first launch, Settings opens automatically if no SNOW URL has been saved.
+After saving, the app shows the confirmation message and returns to the
+notification area when **OK** is clicked.
+
 ## Publish updates through GitHub
 
 The updater checks for a newer GitHub Release shortly after launch and every 15

@@ -29,12 +29,12 @@ jobs:
       - name: Set this build's version
         shell: pwsh
         run: |
-          $patch = [int]$env:GITHUB_RUN_NUMBER + 2
+          $patch = [int]$env:GITHUB_RUN_NUMBER + 3
           $version = "1.0.$patch"
-          Set-Content -NoNewline version.py "APP_VERSION = `"$version`""
+          Set-Content -Path version.py -Value "APP_VERSION = `"$version`"" -NoNewline
           $installer = Get-Content installer.iss -Raw
           $installer = [regex]::Replace($installer, '(?m)^#define AppVersion ".*"$', "#define AppVersion `"$version`"")
-          Set-Content installer.iss $installer
+          Set-Content -Path installer.iss -Value $installer
           "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
 
       - name: Build standalone app and installer

@@ -1,5 +1,5 @@
 #define AppName "SNOW Reminder"
-#define AppVersion "1.0.2"
+#define AppVersion "1.0.4"
 #define AppExe "SNOW Reminder.exe"
 
 [Setup]

@@ -157,7 +157,15 @@ class SnowReminder:
             save_settings(self.settings)
             if not self.alert_pending:
                 self.schedule_next()
-            messagebox.showinfo(APP_NAME, "Settings saved.", parent=window)
+            messagebox.showinfo(
+                APP_NAME,
+                "Don't Worry Buddy I am here to remind you now for SNOW, we will not let any response breach",
+                parent=window,
+            )
+            if window.winfo_exists():
+                window.destroy()
+            self.settings_window = None
+            self.root.after(1_000, self.check_for_updates)
 
         ttk.Button(frame, text="Save settings", command=save).pack(anchor="w")
 
@@ -170,6 +178,8 @@ class SnowReminder:
         return tuple(int(part) for part in parts)
 
     def check_for_updates(self, manual: bool = False) -> None:
+        if not manual and not self.settings.get("snow_url", "").strip():
+            return
         if self.update_check_active:
             if manual:
                 messagebox.showinfo(APP_NAME, "An update check is already running.")
@@ -205,6 +215,12 @@ class SnowReminder:
             if info["size"] > MAX_INSTALLER_BYTES:
                 raise ValueError("The installer is larger than the allowed download size.")
             self.root.after(0, lambda: self._update_check_finished(manual, info))
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                error = ("No published release was found. ")
+            else:
+                error = str(exc)
+            self.root.after(0, lambda message=error: self._update_check_finished(manual, None, message))
         except Exception as exc:
             self.root.after(0, lambda error=str(exc): self._update_check_finished(manual, None, error))
 
@@ -212,7 +228,10 @@ class SnowReminder:
         self.update_check_active = False
         if error:
             if manual:
-                messagebox.showerror(APP_NAME, f"Could not check for updates.\n\n{error}")
+                if error.startswith("No published release was found."):
+                    messagebox.showinfo(APP_NAME, error)
+                else:
+                    messagebox.showerror(APP_NAME, f"Could not check for updates.\n\n{error}")
             return
         if info is None:
             if manual:
@@ -388,6 +407,8 @@ class SnowReminder:
     def run(self) -> None:
         threading.Thread(target=self.icon.run, daemon=True, name="SNOW notification icon").start()
         self.schedule_next()
+        if not self.settings.get("snow_url", "").strip():
+            self.root.after(150, self.show_settings)
         self.root.after(15_000, self.check_for_updates)
         self.root.after(UPDATE_CHECK_MS, self._schedule_update_check)
         self.root.mainloop()
