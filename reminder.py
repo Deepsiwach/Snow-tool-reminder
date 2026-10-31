@@ -156,13 +156,13 @@ class SnowReminder:
         window = tk.Toplevel(self.root)
         self.settings_window = window
         window.title(f"{APP_NAME}  |  Preferences")
-        window.geometry("600x500")
+        window.geometry("600x580")
         window.resizable(False, False)
         window.protocol("WM_DELETE_WINDOW", window.withdraw)
         window.configure(bg="#f3f6fb")
         window.update_idletasks()
         sw, sh = window.winfo_screenwidth(), window.winfo_screenheight()
-        window.geometry(f"600x500+{max(0, (sw - 600)//2)}+{max(0, (sh - 500)//2)}")
+        window.geometry(f"600x580+{max(0, (sw - 600)//2)}+{max(0, (sh - 580)//2)}")
         bg, card, ink, muted, accent = "#f3f6fb", "#ffffff", "#172b4d", "#66758a", "#087f8c"
         shell = tk.Frame(window, bg=bg)
         shell.pack(fill="both", expand=True, padx=24, pady=22)
@@ -174,6 +174,8 @@ class SnowReminder:
                  font=("Segoe UI", 22, "bold")).pack(anchor="w", pady=(3, 1))
         tk.Label(header, text="A little nudge to keep your queue on track.", bg=bg, fg=muted,
                  font=("Segoe UI", 10)).pack(anchor="w")
+        footer = tk.Frame(shell, bg=bg)
+        footer.pack(side="bottom", fill="x", pady=(12, 0))
         frame = tk.Frame(shell, bg=card, highlightthickness=1, highlightbackground="#e3e9f2")
         frame.pack(fill="both", expand=True)
         content = tk.Frame(frame, bg=card)
@@ -208,8 +210,6 @@ class SnowReminder:
         tk.Label(note, text="The tray timer drains as your next reminder gets closer.\n"
                  "Unanswered alerts return every minute with a sound.", bg="#eef7f7", fg="#35505f",
                  justify="left", font=("Segoe UI", 9)).pack(side="left", pady=9)
-        footer = tk.Frame(shell, bg=bg)
-        footer.pack(fill="x", pady=(16, 0))
         tk.Label(footer, text="Runs quietly from the notification area", bg=bg, fg=muted,
                  font=("Segoe UI", 9)).pack(side="left", pady=10)
 
