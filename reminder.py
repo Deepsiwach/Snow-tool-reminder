@@ -18,7 +18,7 @@ import tkinter as tk
 import webbrowser
 import winsound
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
 import pystray
 from PIL import Image, ImageDraw
@@ -70,6 +70,10 @@ class SnowReminder:
         self.dismissed_update_version: str | None = None
         self.pending_update: dict | None = None
         self.update_window: tk.Toplevel | None = None
+        self.update_progress_canvas: tk.Canvas | None = None
+        self.update_progress_fill: int | None = None
+        self.update_progress_text: tk.Label | None = None
+        self.update_progress_detail: tk.Label | None = None
         self.icon = pystray.Icon(APP_NAME, self.make_icon(1.0), APP_NAME, menu=pystray.Menu(
             pystray.MenuItem("Settings", self.tray_settings, default=True),
             pystray.MenuItem("Check SNOW now", self.tray_alert),
@@ -343,14 +347,62 @@ class SnowReminder:
         window = tk.Toplevel(self.root)
         self.update_window = window
         window.title("Updating SNOW Reminder")
-        window.geometry("360x120")
+        width, height = 520, 278
+        screen_width, screen_height = window.winfo_screenwidth(), window.winfo_screenheight()
+        window.geometry(f"{width}x{height}+{max(0, (screen_width-width)//2)}+{max(0, (screen_height-height)//2)}")
         window.resizable(False, False)
         window.attributes("-topmost", True)
-        ttk.Label(window, text=f"Downloading version {info['version']}…", padding=(18, 18, 18, 8)).pack(anchor="w")
-        ttk.Progressbar(window, mode="indeterminate").pack(fill="x", padx=18, pady=(0, 16))
+        window.configure(bg="#edf2f7")
+        card = tk.Frame(window, bg="#ffffff", highlightthickness=1, highlightbackground="#dce5ef")
+        card.pack(fill="both", expand=True, padx=18, pady=18)
+        header = tk.Frame(card, bg="#14304a", height=66)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text="SNOW  /  SOFTWARE UPDATE", bg="#14304a", fg="#87e2d3",
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=22, pady=(11, 1))
+        tk.Label(header, text=f"Preparing version {info['version']}", bg="#14304a", fg="#ffffff",
+                 font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=22)
+        body = tk.Frame(card, bg="#ffffff")
+        body.pack(fill="both", expand=True, padx=22, pady=(18, 14))
+        tk.Label(body, text="Downloading the latest reminder", bg="#ffffff", fg="#20364b",
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(body, text="Keep this window open while we securely prepare the installer.",
+                 bg="#ffffff", fg="#697b8c", font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 14))
+        self.update_progress_canvas = tk.Canvas(body, height=14, bg="#e6edf3", bd=0,
+                                                highlightthickness=0, relief="flat")
+        self.update_progress_canvas.pack(fill="x")
+        self.update_progress_fill = self.update_progress_canvas.create_rectangle(
+            0, 0, 0, 14, fill="#13a89e", outline="")
+        row = tk.Frame(body, bg="#ffffff")
+        row.pack(fill="x", pady=(8, 0))
+        self.update_progress_detail = tk.Label(row, text="Connecting to GitHub…", bg="#ffffff",
+                                               fg="#697b8c", font=("Segoe UI", 9))
+        self.update_progress_detail.pack(side="left")
+        self.update_progress_text = tk.Label(row, text="0%", bg="#ffffff", fg="#14304a",
+                                             font=("Segoe UI", 9, "bold"))
+        self.update_progress_text.pack(side="right")
+        tk.Label(body, text="SNOW Reminder will reopen after installation.", bg="#ffffff", fg="#8a99a8",
+                 font=("Segoe UI", 8)).pack(anchor="w", pady=(12, 0))
         window.grab_set()
         threading.Thread(target=self._download_update, args=(info,), daemon=True,
                          name="SNOW update download").start()
+
+    def _set_update_progress(self, downloaded: int, total: int, status: str = "Downloading update") -> None:
+        if self.update_window is None or not self.update_window.winfo_exists():
+            return
+        fraction = max(0.0, min(1.0, downloaded / total)) if total > 0 else 0.0
+        if self.update_progress_canvas is not None and self.update_progress_canvas.winfo_exists():
+            canvas = self.update_progress_canvas
+            width = max(1, canvas.winfo_width())
+            canvas.coords(self.update_progress_fill, 0, 0, int(width * fraction), 14)
+        if self.update_progress_text is not None and self.update_progress_text.winfo_exists():
+            self.update_progress_text.configure(text=f"{int(fraction * 100)}%")
+        if self.update_progress_detail is not None and self.update_progress_detail.winfo_exists():
+            if total > 0:
+                detail = f"{downloaded / (1024 * 1024):.1f} MB of {total / (1024 * 1024):.1f} MB  ·  {status}"
+            else:
+                detail = status
+            self.update_progress_detail.configure(text=detail)
 
     def _download_update(self, info: dict) -> None:
         file_descriptor, target_name = tempfile.mkstemp(prefix="SNOW-Reminder-Setup-", suffix=".exe")
@@ -370,6 +422,11 @@ class SnowReminder:
                         raise ValueError("The installer download exceeded the allowed size.")
                     digest.update(block)
                     output.write(block)
+                    total = int(info.get("size", 0))
+                    self.root.after(0, lambda done=downloaded, size=total:
+                                    self._set_update_progress(done, size))
+            self.root.after(0, lambda: self._set_update_progress(
+                downloaded, int(info.get("size", downloaded)), "Verifying checksum"))
             expected = info.get("digest")
             if expected and expected.startswith("sha256:") and digest.hexdigest().lower() != expected[7:].lower():
                 raise ValueError("The downloaded installer did not match GitHub's SHA-256 digest.")
@@ -390,6 +447,10 @@ class SnowReminder:
             self.update_window.grab_release()
             self.update_window.destroy()
         self.update_window = None
+        self.update_progress_canvas = None
+        self.update_progress_fill = None
+        self.update_progress_text = None
+        self.update_progress_detail = None
 
     def _launch_update(self, installer: Path) -> None:
         self._close_update_window()
