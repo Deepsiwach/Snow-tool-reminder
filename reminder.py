@@ -10,8 +10,9 @@ import subprocess
 import sys
 import tempfile
 import threading
-import threading
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import tkinter as tk
 import webbrowser
@@ -60,6 +61,7 @@ class SnowReminder:
         self.active_alert: tk.Toplevel | None = None
         self.alert_pending = False
         self.next_alert_id = None
+        self.next_alert_at: float | None = None
         self.retry_id = None
         self.sound_active = False
         self.settings_window: tk.Toplevel | None = None
@@ -68,7 +70,7 @@ class SnowReminder:
         self.dismissed_update_version: str | None = None
         self.pending_update: dict | None = None
         self.update_window: tk.Toplevel | None = None
-        self.icon = pystray.Icon(APP_NAME, self.make_icon(), APP_NAME, menu=pystray.Menu(
+        self.icon = pystray.Icon(APP_NAME, self.make_icon(1.0), APP_NAME, menu=pystray.Menu(
             pystray.MenuItem("Settings", self.tray_settings, default=True),
             pystray.MenuItem("Check SNOW now", self.tray_alert),
             pystray.MenuItem("Check for updates", self.tray_check_updates),
@@ -78,12 +80,37 @@ class SnowReminder:
         ))
 
     @staticmethod
-    def make_icon() -> Image.Image:
+    def make_icon(progress: float = 1.0) -> Image.Image:
+        """Draw a small timer dial whose colored arc drains toward the next alert."""
         image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
-        draw.rounded_rectangle((5, 5, 59, 59), radius=12, fill="#b42318")
-        draw.text((22, 10), "!", fill="white", stroke_width=1)
+        draw.ellipse((5, 5, 59, 59), fill="#172b4d")
+        draw.ellipse((10, 10, 54, 54), outline="#42536d", width=5)
+        sweep = max(0, min(360, int(360 * progress)))
+        if sweep:
+            draw.arc((10, 10, 54, 54), start=-90, end=-90 + sweep,
+                     fill="#35d0ba", width=5)
+        draw.ellipse((29, 29, 35, 35), fill="#f4f7fb")
+        draw.line((32, 32, 32, 19), fill="#f4f7fb", width=3)
+        draw.line((32, 32, 41, 36), fill="#f4f7fb", width=3)
         return image
+
+    def _refresh_tray_icon(self) -> None:
+        if self.next_alert_at is None:
+            progress = 0.0 if self.alert_pending else 1.0
+        else:
+            total = max(1.0, float(self.settings.get("interval_minutes", 60)) * 60)
+            progress = max(0.0, min(1.0, (self.next_alert_at - time.monotonic()) / total))
+        try:
+            self.icon.icon = self.make_icon(progress)
+            minutes = max(0, int((self.next_alert_at - time.monotonic()) / 60)) if self.next_alert_at else 0
+            self.icon.title = f"{APP_NAME} — alert in about {minutes} min" if self.next_alert_at else APP_NAME
+        except Exception:
+            pass
+
+    def _tick_tray_icon(self) -> None:
+        self._refresh_tray_icon()
+        self.root.after(5000, self._tick_tray_icon)
 
     def tray_settings(self, _icon=None, _item=None) -> None:
         self.root.after(0, self.show_settings)
@@ -124,24 +151,64 @@ class SnowReminder:
             return
         window = tk.Toplevel(self.root)
         self.settings_window = window
-        window.title(f"{APP_NAME} Settings")
-        window.geometry("520x320")
+        window.title(f"{APP_NAME}  |  Preferences")
+        window.geometry("600x500")
         window.resizable(False, False)
         window.protocol("WM_DELETE_WINDOW", window.withdraw)
-        frame = ttk.Frame(window, padding=22)
+        window.configure(bg="#f3f6fb")
+        window.update_idletasks()
+        sw, sh = window.winfo_screenwidth(), window.winfo_screenheight()
+        window.geometry(f"600x500+{max(0, (sw - 600)//2)}+{max(0, (sh - 500)//2)}")
+        bg, card, ink, muted, accent = "#f3f6fb", "#ffffff", "#172b4d", "#66758a", "#087f8c"
+        window.option_add("*Font", "Segoe UI 10")
+        shell = tk.Frame(window, bg=bg)
+        shell.pack(fill="both", expand=True, padx=24, pady=22)
+        header = tk.Frame(shell, bg=bg)
+        header.pack(fill="x", pady=(0, 18))
+        tk.Label(header, text="SNOW", bg=bg, fg=accent,
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(header, text="Reminder settings", bg=bg, fg=ink,
+                 font=("Segoe UI", 22, "bold")).pack(anchor="w", pady=(3, 1))
+        tk.Label(header, text="A little nudge to keep your queue on track.", bg=bg, fg=muted,
+                 font=("Segoe UI", 10)).pack(anchor="w")
+        frame = tk.Frame(shell, bg=card, highlightthickness=1, highlightbackground="#e3e9f2")
         frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text=APP_NAME, font=("Segoe UI", 19, "bold")).pack(anchor="w")
-        ttk.Label(frame, text="Set the link that opens your ServiceNow queue.", wraplength=450).pack(anchor="w", pady=(5, 16))
-        ttk.Label(frame, text="SNOW link").pack(anchor="w")
+        content = tk.Frame(frame, bg=card)
+        content.pack(fill="both", expand=True, padx=22, pady=21)
+        tk.Label(content, text="ServiceNow queue", bg=card, fg=ink,
+                 font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        tk.Label(content, text="Paste the page you want to open when a reminder appears.",
+                 bg=card, fg=muted, wraplength=500, justify="left").pack(anchor="w", pady=(4, 13))
+        tk.Label(content, text="SNOW link", bg=card, fg=ink,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w")
         url_var = tk.StringVar(value=self.settings["snow_url"])
-        ttk.Entry(frame, textvariable=url_var).pack(fill="x", pady=(4, 14))
-        row = ttk.Frame(frame)
-        row.pack(fill="x")
-        ttk.Label(row, text="Remind again every").pack(side="left")
+        url_entry = tk.Entry(content, textvariable=url_var, relief="flat", bg="#f7f9fc", fg=ink,
+                             insertbackground=ink, highlightthickness=1,
+                             highlightbackground="#d9e1ec", highlightcolor=accent,
+                             font=("Segoe UI", 10))
+        url_entry.pack(fill="x", ipady=10, pady=(6, 19))
+        tk.Label(content, text="REMINDER INTERVAL", bg=card, fg=muted,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        row = tk.Frame(content, bg=card)
+        row.pack(fill="x", pady=(8, 0))
         interval_var = tk.StringVar(value=str(self.settings["interval_minutes"]))
-        ttk.Spinbox(row, from_=1, to=10080, width=8, textvariable=interval_var).pack(side="left", padx=8)
-        ttk.Label(row, text="minutes after opening SNOW").pack(side="left")
-        ttk.Label(frame, text="The app starts automatically with Windows and stays in the notification area. An unanswered alert returns every minute with a continuous sound.", wraplength=465).pack(anchor="w", pady=(18, 14))
+        tk.Spinbox(row, from_=1, to=10080, width=8, textvariable=interval_var,
+                   relief="flat", bg="#f7f9fc", fg=ink, buttonbackground="#e8eef5",
+                   highlightthickness=1, highlightbackground="#d9e1ec",
+                   font=("Segoe UI", 11)).pack(side="left", ipady=5)
+        tk.Label(row, text="minutes between reminders", bg=card, fg=ink,
+                 font=("Segoe UI", 10)).pack(side="left", padx=11)
+        note = tk.Frame(content, bg="#eef7f7")
+        note.pack(fill="x", pady=(22, 0))
+        tk.Label(note, text="◷", bg="#eef7f7", fg=accent,
+                 font=("Segoe UI", 18, "bold")).pack(side="left", padx=(12, 9), pady=8)
+        tk.Label(note, text="The tray timer drains as your next reminder gets closer.\n"
+                 "Unanswered alerts return every minute with a sound.", bg="#eef7f7", fg="#35505f",
+                 justify="left", font=("Segoe UI", 9)).pack(side="left", pady=9)
+        footer = tk.Frame(shell, bg=bg)
+        footer.pack(fill="x", pady=(16, 0))
+        tk.Label(footer, text="Runs quietly from the notification area", bg=bg, fg=muted,
+                 font=("Segoe UI", 9)).pack(side="left", pady=10)
 
         def save() -> None:
             url = url_var.get().strip()
@@ -152,8 +219,11 @@ class SnowReminder:
             except ValueError:
                 messagebox.showerror(APP_NAME, "Enter an interval of at least 1 minute.", parent=window)
                 return
-            if not url.lower().startswith(("https://", "http://")):
-                messagebox.showerror(APP_NAME, "Enter a SNOW URL beginning with https:// or http://.", parent=window)
+            parsed_url = urllib.parse.urlsplit(url)
+            if (parsed_url.scheme.lower() != "https" or not parsed_url.hostname
+                    or parsed_url.username or parsed_url.password
+                    or any(ord(char) < 32 for char in url)):
+                messagebox.showerror(APP_NAME, "Enter a valid SNOW link beginning with https://.", parent=window)
                 return
             self.settings = {"snow_url": url, "interval_minutes": interval, "start_with_windows": True}
             save_settings(self.settings)
@@ -169,7 +239,11 @@ class SnowReminder:
             self.settings_window = None
             self.root.after(1_000, self.check_for_updates)
 
-        ttk.Button(frame, text="Save settings", command=save).pack(anchor="w")
+        save_button = tk.Button(footer, text="Save settings", command=save, bg=accent, fg="white",
+                                activebackground="#066b75", activeforeground="white", relief="flat",
+                                bd=0, padx=22, pady=10, cursor="hand2",
+                                font=("Segoe UI", 10, "bold"))
+        save_button.pack(side="right")
 
     @staticmethod
     def version_key(version: str) -> tuple[int, ...]:
@@ -222,6 +296,8 @@ class SnowReminder:
                 )
             info = {"version": remote_version, "url": asset["browser_download_url"],
                     "digest": asset.get("digest"), "size": int(asset.get("size", 0))}
+            if not str(info["digest"] or "").startswith("sha256:"):
+                raise ValueError("GitHub did not provide a SHA-256 checksum for this installer.")
             if info["size"] > MAX_INSTALLER_BYTES:
                 raise ValueError("The installer is larger than the allowed download size.")
             self.root.after(0, lambda: self._update_check_finished(manual, info))
@@ -278,7 +354,9 @@ class SnowReminder:
                          name="SNOW update download").start()
 
     def _download_update(self, info: dict) -> None:
-        target = Path(tempfile.gettempdir()) / f"SNOW-Reminder-Setup-{info['version']}.exe"
+        file_descriptor, target_name = tempfile.mkstemp(prefix="SNOW-Reminder-Setup-", suffix=".exe")
+        os.close(file_descriptor)
+        target = Path(target_name)
         digest = hashlib.sha256()
         downloaded = 0
         try:
@@ -330,10 +408,14 @@ class SnowReminder:
         if self.next_alert_id is not None:
             self.root.after_cancel(self.next_alert_id)
         delay = max(1, int(self.settings["interval_minutes"])) * 60 * 1000
+        self.next_alert_at = time.monotonic() + delay / 1000
         self.next_alert_id = self.root.after(delay, self.raise_alert)
+        self._refresh_tray_icon()
 
     def raise_alert(self) -> None:
         self.next_alert_id = None
+        self.next_alert_at = None
+        self._refresh_tray_icon()
         if not self.settings.get("snow_url"):
             self.show_settings()
             return
@@ -417,6 +499,7 @@ class SnowReminder:
     def run(self) -> None:
         threading.Thread(target=self.icon.run, daemon=True, name="SNOW notification icon").start()
         self.schedule_next()
+        self.root.after(0, self._tick_tray_icon)
         if not self.settings.get("snow_url", "").strip():
             self.root.after(150, self.show_settings)
         self.root.after(15_000, self.check_for_updates)
