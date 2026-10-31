@@ -395,7 +395,9 @@ class SnowReminder:
     def _launch_update(self, installer: Path) -> None:
         self._close_update_window()
         try:
-            subprocess.Popen([str(installer)])
+            subprocess.Popen([
+                str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
+            ])
         except OSError as exc:
             self.update_prompt_active = False
             messagebox.showerror(APP_NAME, f"Could not launch the installer.\n\n{exc}")

@@ -1,5 +1,5 @@
 #define AppName "SNOW Reminder"
-#define AppVersion "1.0.8"
+#define AppVersion "1.0.9"
 #define AppExe "SNOW Reminder.exe"
 
 [Setup]
@@ -20,7 +20,7 @@ CloseApplications=yes
 RestartApplications=no
 
 [Files]
-Source: "build\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\release\SNOW Reminder\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [InstallDelete]
 Type: files; Name: "{userstartup}\SNOW Reminder.lnk"
@@ -32,4 +32,4 @@ Type: filesandordirs; Name: "{userappdata}\SNOW Reminder"
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SNOW Reminder"; ValueData: """{app}\{#AppExe}"""; Flags: uninsdeletevalue
 
 [Run]
-Filename: "{app}\{#AppExe}"; Description: "Start SNOW Reminder in the notification area"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#AppExe}"; Description: "Start SNOW Reminder in the notification area"; Flags: postinstall nowait

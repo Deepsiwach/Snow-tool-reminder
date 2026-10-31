@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 python -m pip install --upgrade -r requirements.txt
 if ($LASTEXITCODE -ne 0) { throw 'Could not install the build dependencies.' }
-python -m PyInstaller --noconfirm --clean --windowed --onefile --name "SNOW Reminder" --distpath "build\release" --hidden-import win32timezone reminder.py
+python -m PyInstaller --noconfirm --clean --windowed --onedir --name "SNOW Reminder" --distpath "build\release" --hidden-import win32timezone reminder.py
 if ($LASTEXITCODE -ne 0) { throw 'Could not build the standalone app.' }
 
 $compiler = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
