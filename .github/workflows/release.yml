@@ -57,5 +57,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $assets = gh release view $tag --json assets --jq '.assets[].name'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($assets -notcontains "SNOW Reminder Setup.exe") { throw "The setup file was not attached to the release." }
+          $expectedAsset = "SNOW Reminder Setup.exe" -replace "[^a-zA-Z0-9]", ""
+          $normalizedAssets = @($assets | ForEach-Object { $_ -replace "[^a-zA-Z0-9]", "" })
+          if ($normalizedAssets -notcontains $expectedAsset) { throw "The setup file was not attached to the release." }
         shell: pwsh

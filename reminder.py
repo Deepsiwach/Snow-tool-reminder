@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -207,8 +208,13 @@ class SnowReminder:
             if self.version_key(remote_version) <= self.version_key(APP_VERSION):
                 self.root.after(0, lambda: self._update_check_finished(manual, None))
                 return
+            # GitHub asset names may arrive with spaces converted to dots by
+            # the release publishing path. Compare the meaningful name parts
+            # while still requiring the expected Windows installer filename.
+            expected_asset_name = re.sub(r"[^a-z0-9]", "", INSTALLER_ASSET.casefold())
             asset = next((item for item in release.get("assets", [])
-                          if item.get("name") == INSTALLER_ASSET), None)
+                          if re.sub(r"[^a-z0-9]", "", str(item.get("name", "")).casefold())
+                          == expected_asset_name), None)
             if not asset or not str(asset.get("browser_download_url", "")).startswith("https://github.com/"):
                 raise ValueError(
                     f"GitHub release v{remote_version} has no installer attached yet. "
