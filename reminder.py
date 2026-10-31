@@ -7,6 +7,7 @@ import hashlib
 import logging
 import os
 import re
+import ctypes
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,7 @@ import webbrowser
 import winsound
 from pathlib import Path
 from tkinter import messagebox
+from ctypes import wintypes
 
 import pystray
 from PIL import Image, ImageDraw
@@ -33,6 +35,7 @@ UPDATE_CHECK_MS = 15 * 60 * 1000
 INSTALLER_ASSET = "SNOW Reminder Setup.exe"
 MAX_INSTALLER_BYTES = 250 * 1024 * 1024
 NO_RELEASE_MESSAGE = "Already up to date. Enjoy Buddy."
+_INSTANCE_MUTEX = None
 
 
 def config_path() -> Path:
@@ -51,6 +54,23 @@ def load_settings() -> dict:
 
 def save_settings(settings: dict) -> None:
     config_path().write_text(json.dumps(settings, indent=2), encoding="utf-8")
+
+
+def acquire_single_instance() -> bool:
+    """Keep two app copies from maintaining competing reminder timers."""
+    global _INSTANCE_MUTEX
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    handle = kernel32.CreateMutexW(None, False, "Local\\SNOWReminder-97025D05-5A75-4FA4-B963-09E53E82D1B3")
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS
+        kernel32.CloseHandle(handle)
+        return False
+    _INSTANCE_MUTEX = handle
+    return True
 
 
 class SnowReminder:
@@ -506,6 +526,7 @@ class SnowReminder:
         if self.next_alert_id is not None:
             self.root.after_cancel(self.next_alert_id)
         delay = max(1, int(self.settings["interval_minutes"])) * 60 * 1000
+        logging.info("Scheduled next reminder in %s minutes", self.settings["interval_minutes"])
         self.next_alert_at = time.monotonic() + delay / 1000
         self.next_alert_id = self.root.after(delay, self.raise_alert)
         self._refresh_tray_icon()
@@ -587,6 +608,7 @@ class SnowReminder:
         if self.active_alert is not None:
             self.active_alert.destroy()
             self.active_alert = None
+        logging.info("SNOW opened; resetting reminder interval")
         self.schedule_next()
 
     def exit_app(self) -> None:
@@ -611,4 +633,5 @@ class SnowReminder:
 
 
 if __name__ == "__main__":
-    SnowReminder().run()
+    if acquire_single_instance():
+        SnowReminder().run()
