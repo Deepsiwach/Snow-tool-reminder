@@ -160,7 +160,6 @@ class SnowReminder:
         sw, sh = window.winfo_screenwidth(), window.winfo_screenheight()
         window.geometry(f"600x500+{max(0, (sw - 600)//2)}+{max(0, (sh - 500)//2)}")
         bg, card, ink, muted, accent = "#f3f6fb", "#ffffff", "#172b4d", "#66758a", "#087f8c"
-        window.option_add("*Font", "Segoe UI 10")
         shell = tk.Frame(window, bg=bg)
         shell.pack(fill="both", expand=True, padx=24, pady=22)
         header = tk.Frame(shell, bg=bg)
@@ -200,8 +199,8 @@ class SnowReminder:
                  font=("Segoe UI", 10)).pack(side="left", padx=11)
         note = tk.Frame(content, bg="#eef7f7")
         note.pack(fill="x", pady=(22, 0))
-        tk.Label(note, text="◷", bg="#eef7f7", fg=accent,
-                 font=("Segoe UI", 18, "bold")).pack(side="left", padx=(12, 9), pady=8)
+        tk.Label(note, text="TIMER", bg="#eef7f7", fg=accent,
+                 font=("Segoe UI", 9, "bold")).pack(side="left", padx=(12, 9), pady=8)
         tk.Label(note, text="The tray timer drains as your next reminder gets closer.\n"
                  "Unanswered alerts return every minute with a sound.", bg="#eef7f7", fg="#35505f",
                  justify="left", font=("Segoe UI", 9)).pack(side="left", pady=9)
