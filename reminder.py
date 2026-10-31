@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import logging
 import os
 import re
 import subprocess
@@ -55,9 +56,16 @@ def save_settings(settings: dict) -> None:
 class SnowReminder:
     def __init__(self) -> None:
         self.settings = load_settings()
+        logging.basicConfig(
+            filename=str(config_path().with_name("app.log")),
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(threadName)s %(message)s",
+            encoding="utf-8",
+        )
         self.root = tk.Tk()
         self.root.withdraw()
         self.root.title(APP_NAME)
+        self.root.report_callback_exception = self._report_callback_exception
         self.active_alert: tk.Toplevel | None = None
         self.alert_pending = False
         self.next_alert_id = None
@@ -74,7 +82,13 @@ class SnowReminder:
         self.update_progress_fill: int | None = None
         self.update_progress_text: tk.Label | None = None
         self.update_progress_detail: tk.Label | None = None
-        self.icon = pystray.Icon(APP_NAME, self.make_icon(1.0), APP_NAME, menu=pystray.Menu(
+        self.tray_thread: threading.Thread | None = None
+        self.shutting_down = False
+        self.icon = self.make_tray_icon()
+        logging.info("Started version %s", APP_VERSION)
+
+    def make_tray_icon(self) -> pystray.Icon:
+        return pystray.Icon(APP_NAME, self.make_icon(1.0), APP_NAME, menu=pystray.Menu(
             pystray.MenuItem("Settings", self.tray_settings, default=True),
             pystray.MenuItem("Check SNOW now", self.tray_alert),
             pystray.MenuItem("Check for updates", self.tray_check_updates),
@@ -82,6 +96,21 @@ class SnowReminder:
             pystray.MenuItem("Uninstall", self.tray_uninstall),
             pystray.MenuItem("Exit", self.tray_exit),
         ))
+
+    @staticmethod
+    def _report_callback_exception(exc_type, exc_value, traceback) -> None:
+        logging.error("Unhandled Tk callback error", exc_info=(exc_type, exc_value, traceback))
+
+    def _run_tray_icon(self) -> None:
+        try:
+            self.icon.run()
+        except Exception:
+            logging.exception("Tray icon loop stopped unexpectedly")
+
+    def _start_tray_icon(self) -> None:
+        self.tray_thread = threading.Thread(
+            target=self._run_tray_icon, daemon=False, name="SNOW notification icon")
+        self.tray_thread.start()
 
     @staticmethod
     def make_icon(progress: float = 1.0) -> Image.Image:
@@ -113,6 +142,11 @@ class SnowReminder:
             pass
 
     def _tick_tray_icon(self) -> None:
+        if (not self.shutting_down
+                and (self.tray_thread is None or not self.tray_thread.is_alive())):
+            logging.warning("Tray thread is not running; recreating the notification icon")
+            self.icon = self.make_tray_icon()
+            self._start_tray_icon()
         self._refresh_tray_icon()
         self.root.after(5000, self._tick_tray_icon)
 
@@ -140,6 +174,7 @@ class SnowReminder:
         if not messagebox.askyesno(APP_NAME, "Uninstall SNOW Reminder and remove its saved SNOW link and settings?"):
             return
         self.stop_sound()
+        self.shutting_down = True
         self.icon.stop()
         try:
             subprocess.Popen([str(uninstaller)])
@@ -463,6 +498,7 @@ class SnowReminder:
             messagebox.showerror(APP_NAME, f"Could not launch the installer.\n\n{exc}")
             return
         self.stop_sound()
+        self.shutting_down = True
         self.icon.stop()
         self.root.destroy()
 
@@ -555,11 +591,12 @@ class SnowReminder:
 
     def exit_app(self) -> None:
         self.stop_sound()
+        self.shutting_down = True
         self.icon.stop()
         self.root.destroy()
 
     def run(self) -> None:
-        threading.Thread(target=self.icon.run, daemon=True, name="SNOW notification icon").start()
+        self._start_tray_icon()
         self.schedule_next()
         self.root.after(0, self._tick_tray_icon)
         if not self.settings.get("snow_url", "").strip():
