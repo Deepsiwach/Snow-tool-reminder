@@ -15,10 +15,12 @@ configured link, stops the sound, closes the alert, and starts the next interval
 ## Install
 
 Run `dist\SNOW Reminder Setup.exe` and follow the installer. It installs to the
-current Windows user's profile and registers the app to run at sign-in. No Python
-or other runtime needs to be installed. The installer also starts the app when
-installation finishes. Open the app's notification-area menu and choose Settings
-to set the SNOW URL and reminder interval.
+current Windows user's profile, registers the app to run at sign-in, and creates
+Start menu and desktop shortcuts so you can relaunch it after choosing Exit in
+the notification area. No Python or other runtime needs to be installed. The
+installer also starts the app when installation finishes. Open the app's
+notification-area menu and choose Settings to set the SNOW URL and reminder
+interval.
 
 On first launch, Settings opens automatically if no SNOW URL has been saved.
 After saving, the app shows the confirmation message and returns to the
@@ -49,8 +51,10 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```
 
 The script downloads Python packaging dependencies, creates the standalone app,
-and compiles the installer. Outputs are `dist\SNOW Reminder.exe` and
-`dist\SNOW Reminder Setup.exe`.
+and compiles the installer. The distributable installer is
+`dist\SNOW Reminder Setup.exe`. The standalone app files are in
+`build\release\SNOW Reminder`; keep that folder together when running the app
+without the installer.
 
 Settings are stored in `%APPDATA%\SNOW Reminder\settings.json`. The app does not
 connect to SNOW or determine ticket assignment; it opens the user's configured

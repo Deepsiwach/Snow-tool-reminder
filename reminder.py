@@ -107,7 +107,7 @@ class SnowReminder:
         self.icon = self.make_tray_icon()
         logging.info("Started version %s", APP_VERSION)
 
-    def make_tray_icon(self) -> pystray.Icon:
+    def make_tray_icon(self):
         return pystray.Icon(APP_NAME, self.make_icon(1.0), APP_NAME, menu=pystray.Menu(
             pystray.MenuItem("Settings", self.tray_settings, default=True),
             pystray.MenuItem("Check SNOW now", self.tray_alert),

@@ -1,5 +1,5 @@
 #define AppName "SNOW Reminder"
-#define AppVersion "1.0.14"
+#define AppVersion "1.0.15"
 #define AppExe "SNOW Reminder.exe"
 
 [Setup]
@@ -21,6 +21,10 @@ RestartApplications=no
 
 [Files]
 Source: "build\release\SNOW Reminder\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{autoprograms}\SNOW Reminder"; Filename: "{app}\{#AppExe}"
+Name: "{autodesktop}\SNOW Reminder"; Filename: "{app}\{#AppExe}"
 
 [InstallDelete]
 Type: files; Name: "{userstartup}\SNOW Reminder.lnk"
